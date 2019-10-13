@@ -39,20 +39,26 @@ from netaddr import IPNetwork, IPAddress
 
     CONFIG is global and living as long as the application is running.
 
+    it will be like:
+
     {
-      "real_phone_number": "",
-      "virtual_number": "",
-      "webhook_pathname": "",
-      "api_username": "",
-      "api_password": "",
-      "account_id": ""
+        "path" : 
+        {
+            "real_phone_number": "",
+            "virtual_number": "",
+            "webhook_pathname": "path",
+            "api_username": "",
+            "api_password": "",
+            "account_id": ""
+        }
+
     }
 
 """
 
 config = {}
 
-def check_config():
+def check_config(config):
 
     print(f"Checking config: {config}")
 
@@ -135,17 +141,20 @@ def configure(self):
 
     length  = int(self.headers.get('Content-Length'))
     content = self.rfile.read(length)
-    config  = json.loads(content)
+    new     = json.loads(content)
 
-    if (1 == check_config()):
+    if (1 == check_config(new)):
         self.send_response(200)
         self.send_header('Access-Control-Allow-Origin', '*')
         self.send_header('Access-Control-Allow-Headers', 'Origin, X-Requested-With, Content-Type, Accept')
     else:
         self.send_response(400)
 
+    config[new['webhook_pathname']] = new
 
     self.end_headers()
+
+    print (f"Configuration dump\n {config}")
 
 """ 
 
@@ -155,8 +164,9 @@ def configure(self):
     
 def process_command_sms(handler, message):
 
+    conf      = config[handler.path]
     base_url  = 'https://api.simwood.com/v3/messaging/'
-    sms_url   = base_url + config['account_id'] + "/sms"
+    sms_url   = base_url + conf['account_id'] + "/sms"
     headers   = {   'Content-Type': 'application/json' }
 
     content   = message['data']['message']
@@ -165,19 +175,17 @@ def process_command_sms(handler, message):
 
         sms = {
 
-            "to"        : config['real_phone_number'],
-            "from"      : config['virtual_number'],
+            "to"        : conf['real_phone_number'],
+            "from"      : conf['virtual_number'],
             "message"   : "We have received your service kill request and shutdown."
         }
 
         x = requests.post(  sms_url, 
                             data = json.dumps(sms),
-                            auth = (config['api_username'], config['api_password']))
+                            auth = (conf['api_username'], conf['api_password']))
 
         print(f"send post request {x} ... {sms}")
-
-        time.sleep(1)
-        sys.exit()
+        config.pop(handler.path, None)
 
     if (content.startswith("sms", 0, 3)):
 
@@ -198,13 +206,13 @@ def process_command_sms(handler, message):
         sms = {
 
             "to"        : parts[1],
-            "from"      : config['virtual_number'],
+            "from"      : conf['virtual_number'],
             "message"   : parts[2]
         }
 
         x = requests.post(  sms_url, 
                             data = json.dumps(sms),
-                            auth = (config['api_username'], config['api_password']))
+                            auth = (conf['api_username'], conf['api_password']))
 
         print(f"forward sms request {x} ... {sms}")
         return 
@@ -234,19 +242,20 @@ def process_command_sms(handler, message):
     
 def process_sms(handler, incoming_sms_content):
 
+    conf      = config[handler.path]
     base_url  = 'https://api.simwood.com/v3/messaging/'
-    sms_url   = base_url + config['account_id'] + "/sms"
+    sms_url   = base_url + conf['account_id'] + "/sms"
     headers   = {   'Content-Type': 'application/json' }
 
     message   = json.loads(incoming_sms_content)
 
-    if (message['data']['originator'] == config['real_phone_number']):
+    if (message['data']['originator'] == conf['real_phone_number']):
         return process_command_sms(handler, message)
 
     source    = message['data']['destination']
     content   = message['data']['message']
 
-    print (f" SMS from {source} expected SMS from {config['virtual_number']} originator {message['data']['originator']}")
+    print (f" SMS from {source} expected SMS from {conf['virtual_number']} originator {message['data']['originator']}")
     """
         build the forwarding SMS
 
@@ -258,14 +267,14 @@ def process_sms(handler, incoming_sms_content):
 
     sms = {
 
-        "to"        : config['real_phone_number'],
-        "from"      : config['virtual_number'],
+        "to"        : conf['real_phone_number'],
+        "from"      : conf['virtual_number'],
         "message"   : content
     }
 
     x = requests.post(  sms_url, 
                         data = json.dumps(sms),
-                        auth = (config['api_username'], config['api_password']))
+                        auth = (conf['api_username'], conf['api_password']))
 
     print(f"send post request {x}")
 
@@ -320,19 +329,13 @@ class request_handler(BaseHTTPRequestHandler):
 
         print (f"Receiving POST at path: {self.path}")
 
-        if (self.path == "/sms"):
-            return incoming_sms(self)
-
         if (self.path == "/configure"):
             return configure(self)
 
         if (0 == config):
             return error_message(self)
 
-        if config.get('webhook_pathname') is None:
-            return error_message(self)
-
-        if (self.path == config['webhook_pathname']):
+        if self.path in config:
             return incoming_sms(self)
 
         return error_message(self)
