@@ -31,17 +31,6 @@ import requests
 from http.server import HTTPServer, BaseHTTPRequestHandler
 from netaddr import IPNetwork, IPAddress
 
-'''
-{
-  "real_phone_number": 447123123123"",
-  "virtual_number": "447537149184",
-  "webhook_pathname": "/sample-webhook/calls",
-  "api_username": "",
-  "api_password": "",
-  "account_id": ""
-}
-'''
-
 """ 
 
     CONFIG is global and living as long as the application is running.
@@ -171,9 +160,7 @@ def sending_sms(self):
     headers   = {   'Content-Type': 'application/json' }
 
     message   = {  
-            'real_phone_number': '4915167722528',
-            'virtual_number': '447537149204',
-            'webhook_pathname': '/test/dummy',
+            
     }
 
     content = json.dumps(message)
