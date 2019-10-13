@@ -181,8 +181,20 @@ def process_command_sms(handler, message):
 
     if (content.startswith("sms", 0, 3)):
 
+        '''
+            Message format for forwarding some number MUST start with 
+            sms.
+
+            sms:1234567890:message
+
+        '''
+
         parts = re.split(":", content)
-        
+
+        if  (parts[0] is None) or (parts[1] is None) or (parts[2] is None):
+            print ( "SMS forwarding, failure with message format")
+            return
+
         sms = {
 
             "to"        : parts[1],
