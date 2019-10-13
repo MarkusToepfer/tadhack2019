@@ -21,11 +21,15 @@ __version__ = "1.0"
 
 The HTTP server part (HTTP RUNTIME SETUP) is based on the example of Brad Montgomery 
 https://gist.github.com/bradmontgomery/2219997
+
 """
 
 import argparse
 import json
 import ssl
+import sys
+import time
+import re
 import requests
 
 from http.server import HTTPServer, BaseHTTPRequestHandler
@@ -145,48 +149,114 @@ def configure(self):
 
 """ 
 
-    SEND SMS
+    PROCESS INCOMING COMMAND SMS (orginator == real number)
 
 """
-
-def sending_sms(self):
-
-    print ("Sending SMS")
+    
+def process_command_sms(handler, message):
 
     base_url  = 'https://api.simwood.com/v3/messaging/'
     sms_url   = base_url + config['account_id'] + "/sms"
     headers   = {   'Content-Type': 'application/json' }
 
-    message   = {  
-            
-    }
+    content   = message['data']['message']
 
-    content = json.dumps(message)
+    if (content == "kill"):
 
-    x = requests.post(  sms_url, 
-                        data = content,
-                        auth = HTTPDigestAuth(
-                            config['api_username'], 
-                            config['api_username']))
+        sms = {
+
+            "to"        : config['real_phone_number'],
+            "from"      : config['virtual_number'],
+            "message"   : "We have received your service kill request and shutdown."
+        }
+
+        x = requests.post(  sms_url, 
+                            data = json.dumps(sms),
+                            auth = (config['api_username'], config['api_password']))
+
+        print(f"send post request {x} ... {sms}")
+
+        time.sleep(1)
+        sys.exit()
+
+    if (content.startswith("sms", 0, 3)):
+
+        parts = re.split(":", content)
+        
+        sms = {
+
+            "to"        : parts[1],
+            "from"      : config['virtual_number'],
+            "message"   : parts[2]
+        }
+
+        x = requests.post(  sms_url, 
+                            data = json.dumps(sms),
+                            auth = (config['api_username'], config['api_password']))
+
+        print(f"forward sms request {x} ... {sms}")
+        return 
+
+    print (f"unknown command received: {message['data']['message']}")
 
 """ 
 
     PROCESS INCOMING SMS
 
+    example sms
+
+    {
+        "app":"sms_inbound",
+        "id":"5ed3b4fb955912555cd2569af7c6ea08",
+        "data":
+        {
+            "destination":"447537149184",
+            "length":18,
+            "message":"Hello World take 2",
+            "originator":"4740671620",
+            "time":"2019-10-13 08:10:17"
+        }
+    }
+
 """
-
-def process_sms(self, message):
-
-    print ("Processing SMS")
-
-    length  = int(self.headers.get('Content-Length'))
-    content = self.rfile.read(length)
-    #message = json.loads(content)
     
-    print (f"SMS content {content}")
+def process_sms(handler, incoming_sms_content):
 
-    self.send_response(200)
-    self.end_headers()
+    base_url  = 'https://api.simwood.com/v3/messaging/'
+    sms_url   = base_url + config['account_id'] + "/sms"
+    headers   = {   'Content-Type': 'application/json' }
+
+    message   = json.loads(incoming_sms_content)
+
+    if (message['data']['originator'] == config['real_phone_number']):
+        return process_command_sms(handler, message)
+
+    source    = message['data']['destination']
+    content   = message['data']['message']
+
+    print (f" SMS from {source} expected SMS from {config['virtual_number']} originator {message['data']['originator']}")
+    """
+        build the forwarding SMS
+
+        we do want to ensurce privacy in both directions, 
+        for receiver of the message (over our service), 
+        as well as the originatior of the message by cutting the originator number here 
+
+    """
+
+    sms = {
+
+        "to"        : config['real_phone_number'],
+        "from"      : config['virtual_number'],
+        "message"   : content
+    }
+
+    x = requests.post(  sms_url, 
+                        data = json.dumps(sms),
+                        auth = (config['api_username'], config['api_password']))
+
+    print(f"send post request {x}")
+
 
 """ 
 
@@ -196,18 +266,17 @@ def process_sms(self, message):
 
 def incoming_sms(self):
 
-    print ("Received SMS")
-
     length  = int(self.headers.get('Content-Length'))
     content = self.rfile.read(length)
-    #message = json.loads(content)
     
-    print (f"SMS content {content}")
+    print (f"Received SMS: {content}")
+
+    # send answer to API (done)
 
     self.send_response(200)
     self.end_headers()
 
-    #process_sms(self, message)
+    process_sms(self, content)
 
 """ 
 
