@@ -165,19 +165,36 @@ def configure(self):
 def process_command_sms(handler, message):
 
     conf      = config[handler.path]
-    base_url  = 'https://api.simwood.com/v3/messaging/'
-    sms_url   = base_url + conf['account_id'] + "/sms"
-    headers   = {   'Content-Type': 'application/json' }
-
+    base_url  = 'https://api.simwood.com/v3'
+    call_url  = 'https://tadhack-berlin.herokuapp.com/catcall'
+ 
+    sms_url   = base_url + '/messaging/'+ conf['account_id'] + "/sms"
+    del_url   = base_url + '/numbers/' + conf['account_id'] + "/allocated/" + conf['virtual_number']
+    headers   = { 'Content-Type': 'application/json' }
     content   = message['data']['message']
 
-    if (content == "kill"):
+    if (content.startswith( ("kill", "Kill", "KILL"), 0, 4)):
+
+        '''
+            Shutdown the number at simwood
+        '''
+
+        x = requests.delete(    del_url,
+                                auth = (conf['api_username'], conf['api_password']))
+
+        print(f"send delete number request {x} to ")
+
+        '''
+            Shutdown the local data
+        '''
+
+        msg = "Your virtual number " + conf['virtual_number'] + " has been destroyed."
 
         sms = {
 
             "to"        : conf['real_phone_number'],
             "from"      : conf['virtual_number'],
-            "message"   : "We have received your service kill request and shutdown."
+            "message"   : msg
         }
 
         x = requests.post(  sms_url, 
@@ -189,7 +206,9 @@ def process_command_sms(handler, message):
 
         print(f"config dump \n {config}")
 
-    if (content.startswith("sms", 0, 3)):
+        return 
+
+    if (content.startswith( ("sms", "Sms", "SMS"), 0, 3)):
 
         '''
             Message format for forwarding some number MUST start with 
@@ -217,6 +236,37 @@ def process_command_sms(handler, message):
                             auth = (conf['api_username'], conf['api_password']))
 
         print(f"forward sms request {x} ... {sms}")
+        return 
+
+    if (content.startswith( ("call", "Call", "CALL"), 0, 4)):
+
+        '''
+            Message format for forwarding some number MUST start with 
+            sms.
+
+            sms:1234567890:message
+
+        '''
+
+        parts = re.split(":", content)
+
+        if  (parts[0] is None) or (parts[1] is None):
+            print ( "CALL connect, failure with message format")
+            return
+
+        msg = {
+
+            "origin"        : parts[1],
+            "destination"   : conf['real_phone_number'],
+            "callid"        : conf['virtual_number']
+        }
+
+        x = requests.post(  call_url, 
+                            headers = headers,
+                            data = json.dumps(msg),
+                            auth = (conf['api_username'], conf['api_password']))
+
+        print(f"Call connect request {x} ... {msg}")
         return 
 
     print (f"unknown command received: {message['data']['message']}")
