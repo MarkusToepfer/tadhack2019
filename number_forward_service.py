@@ -187,6 +187,8 @@ def process_command_sms(handler, message):
         print(f"send post request {x} ... {sms}")
         config.pop(handler.path, None)
 
+        print(f"config dump \n {config}")
+
     if (content.startswith("sms", 0, 3)):
 
         '''
