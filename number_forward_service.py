@@ -35,6 +35,15 @@ from netaddr import IPNetwork, IPAddress
 
     CONFIG is global and living as long as the application is running.
 
+    {
+      "real_phone_number": "",
+      "virtual_number": "",
+      "webhook_pathname": "",
+      "api_username": "",
+      "api_password": "",
+      "account_id": ""
+    }
+
 """
 
 config = {}
@@ -59,6 +68,24 @@ def check_config():
         print ("Config key 'webhook_pathname' with content:" + config['webhook_pathname'])
     else:
         print ("Config without key 'webhook_pathname'")
+        return 0
+
+    if 'api_username' in config:
+        print ("Config key 'api_username' with content:" + config['api_username'])
+    else:
+        print ("Config without key 'api_username'")
+        return 0
+
+    if 'api_password' in config:
+        print ("Config key 'api_password' with content:" + config['api_password'])
+    else:
+        print ("Config without key 'api_password'")
+        return 0
+
+    if 'account_id' in config:
+        print ("Config key 'account_id' with content:" + config['account_id'])
+    else:
+        print ("Config without key 'account_id'")
         return 0
 
     return 1
@@ -89,35 +116,6 @@ def request_from_simwood_ip(address):
         return 1
 
     return 0
-
-""" 
-
-    ACTUAL API HANDLER
-
-"""
-
-def handle_webhook(handler):
-
-    print ("TBD Some source authentication needs to be done here.")
-
-    if handler.headers.get('Content-Length') is None:
-        print ("Handler called without content, ignoring")
-        handler.send_response(400)
-        handler.end_headers()
-        return 
-
-    length  = int(handler.headers.get('Content-Length'))
-    message = json.loads(handler.rfile.read(length))
-
-    print (f"Received message {message}")
-
-    if "app" in message:
-        print ("message with app" + message['app'])
-    else:
-        print ("Received message without app, ignoring")
-        handler.send_response(400)
-        handler.end_headers()
-        return
 
 """ 
 
@@ -173,6 +171,25 @@ def sending_sms(self):
 
 """ 
 
+    PROCESS INCOMING SMS
+
+"""
+
+def process_sms(self, message):
+
+    print ("Processing SMS")
+
+    length  = int(self.headers.get('Content-Length'))
+    content = self.rfile.read(length)
+    #message = json.loads(content)
+    
+    print (f"SMS content {content}")
+
+    self.send_response(200)
+    self.end_headers()
+
+""" 
+
     INCOMING SMS
 
 """
@@ -183,12 +200,14 @@ def incoming_sms(self):
 
     length  = int(self.headers.get('Content-Length'))
     content = self.rfile.read(length)
-    message = json.loads(content)
+    #message = json.loads(content)
     
-    print (f"SMS content {message}")
+    print (f"SMS content {content}")
 
     self.send_response(200)
     self.end_headers()
+
+    #process_sms(self, message)
 
 """ 
 
@@ -233,7 +252,7 @@ class request_handler(BaseHTTPRequestHandler):
             return error_message(self)
 
         if (self.path == config['webhook_pathname']):
-            return handle_webhook(self)
+            return incoming_sms(self)
 
         return error_message(self)
 
@@ -242,7 +261,7 @@ class request_handler(BaseHTTPRequestHandler):
         self.send_header('Access-Control-Allow-Credentials', 'true')
         self.send_header('Access-Control-Allow-Methods', 'GET, POST, OPTIONS')
         self.send_header('Access-Control-Allow-Origin', '*')
-        self.send_header('Access-Control-Allow-Headers', 'Origin, X-Requested-With, Content-Type, Accept')
+        self.send_header('Access-Control-Allow-Headers', '*')
         self.end_headers()
 
         return 
