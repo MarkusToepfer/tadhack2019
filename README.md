@@ -3,7 +3,7 @@ Tadhack 2019
 
 ## Prerequisties
 
-SSL enables server
+SSL enabled server
 The python server should be startet behind some proxy. 
 
 ### Example nginx proxy config
