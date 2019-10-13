@@ -6,7 +6,12 @@ Tadhack 2019
 SSL enabled server
 The python server should be startet behind some proxy. 
 
-### Example nginx proxy config
+## Configuration tool
+
+To configure the service, another client service for number provisioning is required. 
+https://github.com/barinali/tadhack-2019-berlin-client
+
+## Example nginx proxy config
 
 This example config was used for testing to host the SSL proxy at 
 https://markustoepfer.com:8080 and run the python server at http://localhost:8000 on the same maschine.
